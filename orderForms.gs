@@ -1,5 +1,6 @@
-// Documentacó API per crear formularis: https://developers.google.com/apps-script/reference/forms
-// Documentació de l'API per executar scripts: https://developers.google.com/apps-script/api/samples/execute
+// Documentacó API per crear formularis:        https://developers.google.com/apps-script/reference/forms
+// Documentació de l'API per executar scripts:  https://developers.google.com/apps-script/api/samples/execute
+// Documentació per consumir API externes:      https://developers.google.com/apps-script/guides/services/external
 
 
 /*
@@ -22,7 +23,7 @@ function Test()
   var formUrl = GenerateForm(orderNumber);
 
   body = 'URL form: ' + formUrl;
-  MailApp.sendEmail('estevemm96@gmail.com', '[TEST] Formulari a respondre', body);
+  MailApp.sendEmail('esteve.martin@uvesolutions.com,estevemm96@gmail.com', '[TEST] Formulari a respondre', body);
 }
 
 
@@ -34,7 +35,7 @@ function Test()
  * El formulari creat té un trigger per el qual es cridará automáticament
  * la funció 'updateOrder' un cop aquest es respongui
  *
- * La crida d'aquesta funció s'ha de fer via l'API d'Apps Script
+ * La crida d'aquesta funció s'ha de fer via l'API d'execució d'Apps Script
  */
 function GenerateForm(orderNumber) 
 {
@@ -46,7 +47,7 @@ function GenerateForm(orderNumber)
  
   // Afegim una pregunta combobox
   var item = form.addMultipleChoiceItem()
-    .setTitle('Aceptas las bases de nosequé?')
+    .setTitle('Aceptas las bases legales de la Promoción y la Política de Privacidad')
     .setChoiceValues(['Sí','No']);
   
   
@@ -99,12 +100,11 @@ function setupTriggerArguments(trigger, orderInfo)
 
 /**
  * Function which should be called when a trigger runs a function. Returns the stored arguments 
- * and deletes the properties entry and trigger if it is not recurring.
  *
  * @param {string} triggerUid - The trigger id
  * @return {*} - The arguments stored for this trigger
  */
-function handleTriggered(triggerUid) {
+function handleTrigger(triggerUid) {
   var scriptProperties = PropertiesService.getScriptProperties();
   var triggerData = JSON.parse(scriptProperties.getProperty(triggerUid));
 
@@ -116,23 +116,50 @@ function handleTriggered(triggerUid) {
  * Funció que s'executará en respondre el formulari.
  * Rebrà les dades que siguin via les propietats del trigger 
  */
-function updateOrder(event)
+function updateOrder(e)
 {
-  // Obtenim les dades del trigger (dades de la comanda)
-  var functionArguments = handleTriggered(event.triggerUid);
+  if (e)
+  {
+    // Obtenim les dades del trigger (dades de la comanda)
+    var functionArguments = handleTrigger(e.triggerUid);
   
-  // Obtenim les resposes del qüestionari
-  var responses = event.values;
-     
-  // Fer el que sigui
   
-  var orderNumber = functionArguments['orderNumber'];
-  body = 'Comanda: ' + orderNumber + '\n';
-  body += 'Respostes: ' + JSON.stringify(responses);
-  MailApp.sendEmail('estevemm96@gmail.com', '[TEST] Comanda confirmada per el client', body);
-
+    // Obtenim les resposes del qüestionari
+    var response = [];
+    var formResponses = e.response.getItemResponses();  
+    for (var j = 0; j < formResponses.length; j++) 
+    {
+      var itemResponse = formResponses[j];
+      Logger.log('Response to the question "%s" was "%s"',
+        itemResponse.getItem().getTitle(),
+        itemResponse.getResponse());
+        
+      response.push(
+      {
+        question:itemResponse.getItem().getTitle(),
+        response:itemResponse.getResponse()
+      });
+    }
+    Logger.log(response);
+    
   
+    // 
+    //
+    // Cridar API UVE
+    //
+    //
+  
+  
+    // Mail de confirmació
+    var orderNumber = functionArguments['orderNumber'];
+    body = 'Comanda: ' + orderNumber + '\n';
+    body += 'Respostes: ' + JSON.stringify(response);
+    MailApp.sendEmail('esteve.martin@uvesolutions.com', '[TEST] Comanda confirmada per el client', body);
+  
+  }
 }
+
+
 
 
 /**
@@ -143,10 +170,22 @@ function updateOrder(event)
 function test_onFormSubmit() {
 
   var event = {};
-  
+  var response = {};
   
   // Mock form answers
-  event.values = ['yes'];
+  response.getItemResponses = function(){
+    return [{
+      getItem: function(){ 
+        return { getTitle: function()
+                 { 
+                   return 'Aceptas las bases legales de la Promoción y la Política de Privacidad'; 
+                  }
+               }; 
+      },
+      getResponse: function(){ return 'Sí' }
+    }]
+  };
+  event.response = response;
 
 
   // Mock trigger properties
@@ -155,7 +194,6 @@ function test_onFormSubmit() {
     'customer'    : 'blablabla',
     '...'         : '...'
   };
-  
   var triggerUid = 'testTriggerUid';
   event.triggerUid = triggerUid;
   var triggerData = {};
